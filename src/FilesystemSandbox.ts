@@ -1,7 +1,8 @@
 import { Effect, Layer } from "effect";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { copyFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { createInterface } from "node:readline";
 import { Sandbox, SandboxError, type SandboxService } from "./Sandbox.js";
 
 const makeFilesystemSandbox = (sandboxDir: string): SandboxService => ({
@@ -30,6 +31,48 @@ const makeFilesystemSandbox = (sandboxDir: string): SandboxService => ({
           }
         },
       );
+    }),
+
+  execStreaming: (command, onStdoutLine, options) =>
+    Effect.async((resume) => {
+      const proc = spawn("sh", ["-c", command], {
+        cwd: options?.cwd ?? sandboxDir,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      const stdoutChunks: string[] = [];
+      const stderrChunks: string[] = [];
+
+      const rl = createInterface({ input: proc.stdout! });
+      rl.on("line", (line) => {
+        stdoutChunks.push(line);
+        onStdoutLine(line);
+      });
+
+      proc.stderr!.on("data", (chunk: Buffer) => {
+        stderrChunks.push(chunk.toString());
+      });
+
+      proc.on("error", (error) => {
+        resume(
+          Effect.fail(
+            new SandboxError(
+              "execStreaming",
+              `Failed to exec: ${error.message}`,
+            ),
+          ),
+        );
+      });
+
+      proc.on("close", (code) => {
+        resume(
+          Effect.succeed({
+            stdout: stdoutChunks.join("\n"),
+            stderr: stderrChunks.join(""),
+            exitCode: code ?? 0,
+          }),
+        );
+      });
     }),
 
   copyIn: (hostPath, sandboxPath) =>

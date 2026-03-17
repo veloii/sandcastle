@@ -20,6 +20,12 @@ export interface SandboxService {
     options?: { cwd?: string },
   ) => Effect.Effect<ExecResult, SandboxError>;
 
+  readonly execStreaming: (
+    command: string,
+    onStdoutLine: (line: string) => void,
+    options?: { cwd?: string },
+  ) => Effect.Effect<ExecResult, SandboxError>;
+
   readonly copyIn: (
     hostPath: string,
     sandboxPath: string,

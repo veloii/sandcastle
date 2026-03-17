@@ -1,7 +1,8 @@
 import { Effect, Layer } from "effect";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { createInterface } from "node:readline";
 import { Sandbox, SandboxError, type SandboxService } from "./Sandbox.js";
 
 const makeDockerSandbox = (containerName: string): SandboxService => ({
@@ -39,6 +40,53 @@ const makeDockerSandbox = (containerName: string): SandboxService => ({
           }
         },
       );
+    }),
+
+  execStreaming: (command, onStdoutLine, options) =>
+    Effect.async((resume) => {
+      const args = ["exec"];
+      if (options?.cwd) {
+        args.push("-w", options.cwd);
+      }
+      args.push(containerName, "sh", "-c", command);
+
+      const proc = spawn("docker", args, {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      const stdoutChunks: string[] = [];
+      const stderrChunks: string[] = [];
+
+      const rl = createInterface({ input: proc.stdout! });
+      rl.on("line", (line) => {
+        stdoutChunks.push(line);
+        onStdoutLine(line);
+      });
+
+      proc.stderr!.on("data", (chunk: Buffer) => {
+        stderrChunks.push(chunk.toString());
+      });
+
+      proc.on("error", (error) => {
+        resume(
+          Effect.fail(
+            new SandboxError(
+              "execStreaming",
+              `docker exec streaming failed: ${error.message}`,
+            ),
+          ),
+        );
+      });
+
+      proc.on("close", (code) => {
+        resume(
+          Effect.succeed({
+            stdout: stdoutChunks.join("\n"),
+            stderr: stderrChunks.join(""),
+            exitCode: code ?? 0,
+          }),
+        );
+      });
     }),
 
   copyIn: (hostPath, sandboxPath) =>
