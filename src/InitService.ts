@@ -6,6 +6,7 @@ import { SKELETON_PROMPT } from "./templates.js";
 const GITIGNORE = `.env
 patches/
 logs/
+worktrees/
 `;
 
 function buildEnvExample(envManifest: Record<string, string>): string {

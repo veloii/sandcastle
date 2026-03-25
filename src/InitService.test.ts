@@ -86,7 +86,7 @@ describe("InitService scaffold", () => {
     );
   });
 
-  it("includes patches/ in .gitignore", async () => {
+  it("includes patches/, logs/, and worktrees/ in .gitignore", async () => {
     const dir = await makeDir();
     await scaffold(dir, fakeProvider);
 
@@ -96,6 +96,18 @@ describe("InitService scaffold", () => {
     );
     expect(gitignore).toContain("patches/");
     expect(gitignore).toContain("logs/");
+    expect(gitignore).toContain("worktrees/");
+  });
+
+  it("Dockerfile template contains /workspace mount comment", async () => {
+    const dir = await makeDir();
+    await scaffold(dir, claudeCodeProvider);
+
+    const dockerfile = await readFile(
+      join(dir, ".sandcastle", "Dockerfile"),
+      "utf-8",
+    );
+    expect(dockerfile).toContain("/workspace");
   });
 
   it("skeleton prompt contains section headers and hints", async () => {
