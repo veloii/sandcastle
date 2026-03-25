@@ -202,6 +202,41 @@ describe("withSandboxLifecycle", () => {
     expect(callbackRan).toBe(false);
   });
 
+  it("lifecycle works with a new branch that does not exist on host", async () => {
+    const { hostDir, sandboxRepoDir, layer } = await setup();
+    await initRepo(hostDir);
+    await commitFile(hostDir, "file.txt", "original", "initial commit");
+
+    const result = await Effect.runPromise(
+      withSandboxLifecycle(
+        { hostRepoDir: hostDir, sandboxRepoDir, branch: "feature/new" },
+        (ctx) =>
+          Effect.gen(function* () {
+            yield* ctx.sandbox.exec('git config user.email "test@test.com"', {
+              cwd: ctx.sandboxRepoDir,
+            });
+            yield* ctx.sandbox.exec('git config user.name "Test"', {
+              cwd: ctx.sandboxRepoDir,
+            });
+            yield* ctx.sandbox.exec(
+              'sh -c "echo new-content > feature.txt && git add feature.txt && git commit -m \\"add feature\\""',
+              { cwd: ctx.sandboxRepoDir },
+            );
+          }),
+      ).pipe(Effect.provide(Layer.merge(layer, testDisplayLayer))),
+    );
+
+    // Branch should exist on host with the commit
+    const { stdout: log } = await execAsync('git log --oneline "feature/new"', {
+      cwd: hostDir,
+    });
+    expect(log).toContain("add feature");
+
+    // Commits list should include the new commit
+    expect(result.commits.length).toBe(1);
+    expect(result.branch).toBe("feature/new");
+  });
+
   it("callback failure propagates (syncOut skipped)", async () => {
     const { hostDir, sandboxRepoDir, layer } = await setup();
     await initRepo(hostDir);

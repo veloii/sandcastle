@@ -75,11 +75,16 @@ export const withSandboxLifecycle = <A>(
     // Record HEAD on the target branch before sync-out
     const targetBranch = branch ?? resolvedBranch;
     const headBeforeSyncOut = yield* Effect.promise(async () => {
-      const { stdout } = await execAsync(
-        `git rev-parse "refs/heads/${targetBranch}"`,
-        { cwd: hostRepoDir },
-      );
-      return stdout.trim();
+      try {
+        const { stdout } = await execAsync(
+          `git rev-parse --verify "refs/heads/${targetBranch}"`,
+          { cwd: hostRepoDir },
+        );
+        return stdout.trim();
+      } catch {
+        // Branch doesn't exist on host yet — will be created during sync-out
+        return null;
+      }
     });
 
     // Run the caller's work
@@ -98,13 +103,20 @@ export const withSandboxLifecycle = <A>(
 
     // Collect commits applied during sync-out
     const commits = yield* Effect.promise(async () => {
-      const { stdout } = await execAsync(
-        `git rev-list "${headBeforeSyncOut}..refs/heads/${targetBranch}" --reverse`,
-        { cwd: hostRepoDir },
-      );
-      const lines = stdout.trim();
-      if (!lines) return [];
-      return lines.split("\n").map((sha) => ({ sha }));
+      // For new branches, use baseHead as range start (syncOut creates from HEAD)
+      const rangeStart = headBeforeSyncOut ?? baseHead;
+      try {
+        const { stdout } = await execAsync(
+          `git rev-list "${rangeStart}..refs/heads/${targetBranch}" --reverse`,
+          { cwd: hostRepoDir },
+        );
+        const lines = stdout.trim();
+        if (!lines) return [];
+        return lines.split("\n").map((sha) => ({ sha }));
+      } catch {
+        // Branch doesn't exist on host (no commits were produced)
+        return [];
+      }
     });
 
     return { result, branch: targetBranch, commits };
