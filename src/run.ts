@@ -105,7 +105,7 @@ export const run = async (options: RunOptions): Promise<RunResult> => {
       ? (() => {
           mkdirSync(dirname(resolvedLogging.path), { recursive: true });
           console.log(`Agent started`);
-          console.log(`Logging to file: ${resolvedLogging.path}`);
+          console.log(`Logging to file`);
           console.log(`  tail -f ${resolvedLogging.path}`);
           return FileDisplay.layer(resolvedLogging.path);
         })()
