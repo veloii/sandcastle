@@ -22,6 +22,8 @@ export class SandboxFactory extends Context.Tag("SandboxFactory")<
     readonly withSandbox: <A, E, R>(
       effect: Effect.Effect<A, E, R | Sandbox>,
     ) => Effect.Effect<A, E | DockerError, Exclude<R, Sandbox>>;
+    /** True in worktree mode — the repo is bind-mounted, so sync is unnecessary. */
+    readonly skipSync: boolean;
   }
 >() {}
 
@@ -75,6 +77,7 @@ export const WorktreeDockerSandboxFactory = {
     Effect.gen(function* () {
       const { imageName, env, hostRepoDir } = yield* WorktreeSandboxConfig;
       return {
+        skipSync: true,
         withSandbox: <A, E, R>(
           effect: Effect.Effect<A, E, R | Sandbox>,
         ): Effect.Effect<A, E | DockerError, Exclude<R, Sandbox>> => {
@@ -147,6 +150,7 @@ export const DockerSandboxFactory = {
     Effect.gen(function* () {
       const { imageName, env } = yield* SandboxConfig;
       return {
+        skipSync: false,
         withSandbox: <A, E, R>(
           effect: Effect.Effect<A, E, R | Sandbox>,
         ): Effect.Effect<A, E | DockerError, Exclude<R, Sandbox>> => {

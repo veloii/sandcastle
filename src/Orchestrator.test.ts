@@ -76,6 +76,7 @@ const makeTestSandboxFactory = (
   const sandboxRepoDir = join(sandboxBaseDir, "repo");
 
   const factoryLayer = Layer.succeed(SandboxFactory, {
+    skipSync: false,
     withSandbox: <A, E, R>(
       effect: Effect.Effect<A, E, R | Sandbox>,
     ): Effect.Effect<A, E | DockerError, Exclude<R, Sandbox>> =>

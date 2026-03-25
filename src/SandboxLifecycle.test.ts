@@ -1,6 +1,6 @@
 import { Effect, Layer, Ref } from "effect";
 import { exec } from "node:child_process";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -288,5 +288,164 @@ describe("withSandboxLifecycle", () => {
     // Host should be unchanged (no sync-out ran)
     const { stdout } = await execAsync("git log --oneline", { cwd: hostDir });
     expect(stdout.trim().split("\n")).toHaveLength(1);
+  });
+});
+
+describe("withSandboxLifecycle (worktree mode — skipSync: true)", () => {
+  const setupWorktree = async () => {
+    const hostDir = await mkdtemp(join(tmpdir(), "host-"));
+    await execAsync("git init -b main", { cwd: hostDir });
+    await execAsync('git config user.email "test@test.com"', { cwd: hostDir });
+    await execAsync('git config user.name "Test"', { cwd: hostDir });
+    await writeFile(join(hostDir, "file.txt"), "original");
+    await execAsync("git add file.txt", { cwd: hostDir });
+    await execAsync('git commit -m "initial commit"', { cwd: hostDir });
+
+    // Create a real git worktree from the host repo
+    const worktreesDir = join(hostDir, ".sandcastle", "worktrees");
+    await mkdir(worktreesDir, { recursive: true });
+    const worktreeDir = join(worktreesDir, "test-worktree");
+    await execAsync(
+      `git worktree add -b "sandcastle/test" "${worktreeDir}" HEAD`,
+      { cwd: hostDir },
+    );
+
+    const layer = FilesystemSandbox.layer(worktreeDir);
+    return { hostDir, worktreeDir, layer };
+  };
+
+  it("skips sync-in — worktree files are already accessible", async () => {
+    const { hostDir, worktreeDir, layer } = await setupWorktree();
+
+    await Effect.runPromise(
+      withSandboxLifecycle(
+        {
+          hostRepoDir: hostDir,
+          sandboxRepoDir: worktreeDir,
+          skipSync: true,
+        },
+        (ctx) =>
+          Effect.gen(function* () {
+            // Files from the host repo are already visible — no sync-in needed
+            const result = yield* ctx.sandbox.exec("cat file.txt", {
+              cwd: ctx.sandboxRepoDir,
+            });
+            expect(result.stdout.trim()).toBe("original");
+          }),
+      ).pipe(Effect.provide(Layer.merge(layer, testDisplayLayer))),
+    );
+  });
+
+  it("commits in worktree are immediately visible on host (no sync-out needed)", async () => {
+    const { hostDir, worktreeDir, layer } = await setupWorktree();
+
+    await Effect.runPromise(
+      withSandboxLifecycle(
+        {
+          hostRepoDir: hostDir,
+          sandboxRepoDir: worktreeDir,
+          skipSync: true,
+        },
+        (ctx) =>
+          Effect.gen(function* () {
+            yield* ctx.sandbox.exec('git config user.email "test@test.com"', {
+              cwd: ctx.sandboxRepoDir,
+            });
+            yield* ctx.sandbox.exec('git config user.name "Test"', {
+              cwd: ctx.sandboxRepoDir,
+            });
+            yield* ctx.sandbox.exec(
+              'sh -c "echo worktree-content > worktree-file.txt && git add worktree-file.txt && git commit -m \\"worktree commit\\""',
+              { cwd: ctx.sandboxRepoDir },
+            );
+          }),
+      ).pipe(Effect.provide(Layer.merge(layer, testDisplayLayer))),
+    );
+
+    // Commit is visible on host under the worktree branch — no sync-out was needed
+    const { stdout: log } = await execAsync(
+      'git log --oneline "sandcastle/test"',
+      { cwd: hostDir },
+    );
+    expect(log).toContain("worktree commit");
+
+    // File is directly readable from the worktree (same filesystem)
+    const content = await readFile(
+      join(worktreeDir, "worktree-file.txt"),
+      "utf-8",
+    );
+    expect(content.trim()).toBe("worktree-content");
+  });
+
+  it("onSandboxReady hooks still run in worktree mode", async () => {
+    const { hostDir, worktreeDir, layer } = await setupWorktree();
+
+    await Effect.runPromise(
+      withSandboxLifecycle(
+        {
+          hostRepoDir: hostDir,
+          sandboxRepoDir: worktreeDir,
+          skipSync: true,
+          hooks: {
+            onSandboxReady: [{ command: "echo ready > ready-marker.txt" }],
+          },
+        },
+        (ctx) =>
+          Effect.gen(function* () {
+            const result = yield* ctx.sandbox.exec("cat ready-marker.txt", {
+              cwd: ctx.sandboxRepoDir,
+            });
+            expect(result.stdout.trim()).toBe("ready");
+          }),
+      ).pipe(Effect.provide(Layer.merge(layer, testDisplayLayer))),
+    );
+  });
+
+  it("returns commits made in the worktree", async () => {
+    const { hostDir, worktreeDir, layer } = await setupWorktree();
+
+    const result = await Effect.runPromise(
+      withSandboxLifecycle(
+        {
+          hostRepoDir: hostDir,
+          sandboxRepoDir: worktreeDir,
+          skipSync: true,
+        },
+        (ctx) =>
+          Effect.gen(function* () {
+            yield* ctx.sandbox.exec('git config user.email "test@test.com"', {
+              cwd: ctx.sandboxRepoDir,
+            });
+            yield* ctx.sandbox.exec('git config user.name "Test"', {
+              cwd: ctx.sandboxRepoDir,
+            });
+            yield* ctx.sandbox.exec(
+              'sh -c "echo new > new-file.txt && git add new-file.txt && git commit -m \\"new commit\\""',
+              { cwd: ctx.sandboxRepoDir },
+            );
+          }),
+      ).pipe(Effect.provide(Layer.merge(layer, testDisplayLayer))),
+    );
+
+    expect(result.commits).toHaveLength(1);
+    expect(result.branch).toBe("sandcastle/test");
+  });
+
+  it("returns empty commits when no work is done in worktree mode", async () => {
+    const { hostDir, worktreeDir, layer } = await setupWorktree();
+
+    const result = await Effect.runPromise(
+      withSandboxLifecycle(
+        {
+          hostRepoDir: hostDir,
+          sandboxRepoDir: worktreeDir,
+          skipSync: true,
+        },
+        () => Effect.succeed("no-op"),
+      ).pipe(Effect.provide(Layer.merge(layer, testDisplayLayer))),
+    );
+
+    expect(result.commits).toHaveLength(0);
+    expect(result.result).toBe("no-op");
   });
 });

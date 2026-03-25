@@ -183,7 +183,13 @@ export const orchestrate = (
 
       const lifecycleResult = yield* factory.withSandbox(
         withSandboxLifecycle(
-          { hostRepoDir, sandboxRepoDir, hooks: config?.hooks, branch },
+          {
+            hostRepoDir,
+            sandboxRepoDir,
+            hooks: config?.hooks,
+            branch,
+            skipSync: factory.skipSync,
+          },
           (ctx) =>
             Effect.gen(function* () {
               // Preprocess prompt (run !`command` expressions inside sandbox)

@@ -14,6 +14,8 @@ export interface SandboxLifecycleOptions {
   readonly sandboxRepoDir: string;
   readonly hooks?: SandcastleConfig["hooks"];
   readonly branch?: string;
+  /** When true, skip sync-in and sync-out (worktree mode: repo is bind-mounted directly). */
+  readonly skipSync?: boolean;
 }
 
 export interface SandboxContext {
@@ -37,19 +39,28 @@ export const withSandboxLifecycle = <A>(
   Effect.gen(function* () {
     const sandbox = yield* Sandbox;
     const display = yield* Display;
-    const { hostRepoDir, sandboxRepoDir, hooks, branch } = options;
+    const { hostRepoDir, sandboxRepoDir, hooks, branch, skipSync } = options;
 
-    // Setup: sync-in, onSandboxReady hooks
+    // Setup: sync-in (isolated mode only), onSandboxReady hooks
     let resolvedBranch = "";
     yield* display.taskLog("Setting up sandbox", (message) =>
       Effect.gen(function* () {
-        message("Syncing repo into sandbox");
-        const syncResult = yield* syncIn(
-          hostRepoDir,
-          sandboxRepoDir,
-          branch ? { branch } : undefined,
-        );
-        resolvedBranch = syncResult.branch;
+        if (skipSync) {
+          // Worktree mode: repo is bind-mounted — discover branch directly
+          resolvedBranch = (yield* execOk(
+            sandbox,
+            "git rev-parse --abbrev-ref HEAD",
+            { cwd: sandboxRepoDir },
+          )).stdout.trim();
+        } else {
+          message("Syncing repo into sandbox");
+          const syncResult = yield* syncIn(
+            hostRepoDir,
+            sandboxRepoDir,
+            branch ? { branch } : undefined,
+          );
+          resolvedBranch = syncResult.branch;
+        }
 
         if (hooks?.onSandboxReady?.length) {
           for (const hook of hooks.onSandboxReady) {
@@ -60,50 +71,57 @@ export const withSandboxLifecycle = <A>(
       }),
     );
 
+    const targetBranch = branch ?? resolvedBranch;
+
     // Record base HEAD
     const baseHead = (yield* execOk(sandbox, "git rev-parse HEAD", {
       cwd: sandboxRepoDir,
     })).stdout.trim();
 
-    // Record HEAD on the target branch before sync-out
-    const targetBranch = branch ?? resolvedBranch;
-    const headBeforeSyncOut = yield* Effect.promise(async () => {
-      try {
-        const { stdout } = await execAsync(
-          `git rev-parse --verify "refs/heads/${targetBranch}"`,
-          { cwd: hostRepoDir },
-        );
-        return stdout.trim();
-      } catch {
-        // Branch doesn't exist on host yet — will be created during sync-out
-        return null;
-      }
-    });
+    // Record HEAD on the target branch before sync-out (isolated mode only)
+    const headBeforeSyncOut = skipSync
+      ? null
+      : yield* Effect.promise(async () => {
+          try {
+            const { stdout } = await execAsync(
+              `git rev-parse --verify "refs/heads/${targetBranch}"`,
+              { cwd: hostRepoDir },
+            );
+            return stdout.trim();
+          } catch {
+            // Branch doesn't exist on host yet — will be created during sync-out
+            return null;
+          }
+        });
 
     // Run the caller's work
     const result = yield* work({ sandbox, sandboxRepoDir, baseHead });
 
-    // Sync-out — only show spinner if there are commits to sync
-    const currentHead = (yield* execOk(sandbox, "git rev-parse HEAD", {
-      cwd: sandboxRepoDir,
-    })).stdout.trim();
+    if (!skipSync) {
+      // Sync-out — only show spinner if there are commits to sync
+      const currentHead = (yield* execOk(sandbox, "git rev-parse HEAD", {
+        cwd: sandboxRepoDir,
+      })).stdout.trim();
 
-    const syncOutEffect = syncOut(
-      hostRepoDir,
-      sandboxRepoDir,
-      baseHead,
-      branch ? { branch } : undefined,
-    );
+      const syncOutEffect = syncOut(
+        hostRepoDir,
+        sandboxRepoDir,
+        baseHead,
+        branch ? { branch } : undefined,
+      );
 
-    if (currentHead !== baseHead) {
-      yield* display.spinner("Syncing commits back to host", syncOutEffect);
-    } else {
-      yield* syncOutEffect;
+      if (currentHead !== baseHead) {
+        yield* display.spinner("Syncing commits back to host", syncOutEffect);
+      } else {
+        yield* syncOutEffect;
+      }
     }
 
-    // Collect commits applied during sync-out
+    // Collect commits — in worktree mode they're already on host; in isolated mode
+    // they were just applied by sync-out.
     const commits = yield* Effect.promise(async () => {
-      // For new branches, use baseHead as range start (syncOut creates from HEAD)
+      // In isolated mode, use headBeforeSyncOut to capture only sync-out commits.
+      // In worktree mode, use baseHead since commits land directly on the branch.
       const rangeStart = headBeforeSyncOut ?? baseHead;
       try {
         const { stdout } = await execAsync(
