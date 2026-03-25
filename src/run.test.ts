@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildLogFilename,
   sanitizeBranchForFilename,
   USE_WORKTREE_MODE,
   type RunOptions,
@@ -74,5 +75,23 @@ describe("sanitizeBranchForFilename", () => {
     expect(
       sanitizeBranchForFilename("sandcastle/issue-87-log-file-branch-name"),
     ).toBe("sandcastle-issue-87-log-file-branch-name");
+  });
+});
+
+describe("buildLogFilename", () => {
+  it("returns sanitized branch + .log when no target branch", () => {
+    expect(buildLogFilename("main")).toBe("main.log");
+  });
+
+  it("prefixes with target branch when temp branch is used", () => {
+    expect(buildLogFilename("sandcastle/20260325-142719", "main")).toBe(
+      "main-sandcastle-20260325-142719.log",
+    );
+  });
+
+  it("sanitizes target branch with slashes", () => {
+    expect(
+      buildLogFilename("sandcastle/20260325-142719", "feature/my-work"),
+    ).toBe("feature-my-work-sandcastle-20260325-142719.log");
   });
 });

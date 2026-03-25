@@ -14,7 +14,7 @@ import {
   SANDBOX_WORKSPACE_DIR,
 } from "./SandboxFactory.js";
 import { resolveEnv } from "./EnvResolver.js";
-import { generateTempBranchName } from "./WorktreeManager.js";
+import { generateTempBranchName, getCurrentBranch } from "./WorktreeManager.js";
 import {
   type PromptArgs,
   substitutePromptArgs,
@@ -23,6 +23,24 @@ import {
 /** Replace characters that are invalid or problematic in file paths with dashes. */
 export const sanitizeBranchForFilename = (branch: string): string =>
   branch.replace(/[/\\:*?"<>|]/g, "-");
+
+/**
+ * Build the log filename for a run.
+ * When a targetBranch is provided (temp branch mode), prefixes the filename
+ * with the sanitized target branch name so developers can identify which
+ * branch the run was targeting: `<targetBranch>-<resolvedBranch>.log`
+ * When no targetBranch, uses just the resolved branch: `<resolvedBranch>.log`
+ */
+export const buildLogFilename = (
+  resolvedBranch: string,
+  targetBranch?: string,
+): string => {
+  const sanitized = sanitizeBranchForFilename(resolvedBranch);
+  if (targetBranch) {
+    return `${sanitizeBranchForFilename(targetBranch)}-${sanitized}.log`;
+  }
+  return `${sanitized}.log`;
+};
 
 export type LoggingOption =
   | { readonly type: "file"; readonly path: string }
@@ -122,6 +140,11 @@ export const run = async (options: RunOptions): Promise<RunResult> => {
   // the sandbox to work on that branch (instead of the current host branch).
   const resolvedBranch = branch ?? generateTempBranchName();
 
+  // When using a temp branch, prefix the log filename with the target branch
+  // (the host's current branch) so developers can tell which branch was targeted.
+  const targetBranch =
+    branch === undefined ? await getCurrentBranch(hostRepoDir) : undefined;
+
   // Resolve logging option
   const resolvedLogging: LoggingOption = options.logging ?? {
     type: "file",
@@ -129,7 +152,7 @@ export const run = async (options: RunOptions): Promise<RunResult> => {
       hostRepoDir,
       ".sandcastle",
       "logs",
-      `${sanitizeBranchForFilename(resolvedBranch)}.log`,
+      buildLogFilename(resolvedBranch, targetBranch),
     ),
   };
   const displayLayer =

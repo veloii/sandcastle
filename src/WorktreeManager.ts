@@ -28,6 +28,12 @@ const execGit = async (args: string[], cwd: string): Promise<string> => {
 export const generateTempBranchName = (): string =>
   `sandcastle/${formatTimestamp(new Date())}`;
 
+/** Returns the name of the currently checked-out branch in the given repo directory. */
+export const getCurrentBranch = async (repoDir: string): Promise<string> => {
+  const output = await execGit(["rev-parse", "--abbrev-ref", "HEAD"], repoDir);
+  return output.trim();
+};
+
 export interface WorktreeInfo {
   path: string;
   branch: string;
