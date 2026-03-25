@@ -1,8 +1,8 @@
 import { Command, Options } from "@effect/cli";
+import { FileSystem } from "@effect/platform";
 import { Effect, HashMap, Layer } from "effect";
 import * as clack from "@clack/prompts";
 import { spawn } from "node:child_process";
-import { access } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { readConfig } from "./Config.js";
 import { Display } from "./Display.js";
@@ -45,13 +45,21 @@ const agentOption = Options.text("agent").pipe(
 
 const CONFIG_DIR = ".sandcastle";
 
-const requireConfigDir = (cwd: string): Effect.Effect<void, ConfigDirError> =>
-  Effect.tryPromise({
-    try: () => access(join(cwd, CONFIG_DIR)),
-    catch: () =>
-      new ConfigDirError({
-        message: "No .sandcastle/ found. Run `sandcastle init` first.",
-      }),
+const requireConfigDir = (
+  cwd: string,
+): Effect.Effect<void, ConfigDirError, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const exists = yield* fs
+      .exists(join(cwd, CONFIG_DIR))
+      .pipe(Effect.catchAll(() => Effect.succeed(false)));
+    if (!exists) {
+      yield* Effect.fail(
+        new ConfigDirError({
+          message: "No .sandcastle/ found. Run `sandcastle init` first.",
+        }),
+      );
+    }
   });
 
 // --- Init command ---
@@ -438,13 +446,7 @@ const interactiveCommand = Command.make(
       });
 
       // Resolve env vars and run agent provider's env check
-      const env = yield* Effect.tryPromise({
-        try: () => resolveEnv(hostRepoDir),
-        catch: (e) =>
-          new InitError({
-            message: `${e instanceof Error ? e.message : e}`,
-          }),
-      });
+      const env = yield* resolveEnv(hostRepoDir);
 
       yield* Effect.try({
         try: () => provider.envCheck(env),

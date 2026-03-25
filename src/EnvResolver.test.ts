@@ -1,3 +1,5 @@
+import { NodeContext } from "@effect/platform-node";
+import { Effect } from "effect";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -5,6 +7,9 @@ import { describe, expect, it } from "vitest";
 import { resolveEnv } from "./EnvResolver.js";
 
 const makeDir = () => mkdtemp(join(tmpdir(), "env-resolver-"));
+
+const runResolveEnv = (dir: string) =>
+  Effect.runPromise(resolveEnv(dir).pipe(Effect.provide(NodeContext.layer)));
 
 describe("resolveEnv", () => {
   it("returns all key-value pairs from repo root .env", async () => {
@@ -14,7 +19,7 @@ describe("resolveEnv", () => {
       "CLAUDE_CODE_OAUTH_TOKEN=root-oauth\nGH_TOKEN=root-gh\nCUSTOM_VAR=hello\n",
     );
 
-    const env = await resolveEnv(dir);
+    const env = await runResolveEnv(dir);
     expect(env).toEqual({
       CLAUDE_CODE_OAUTH_TOKEN: "root-oauth",
       GH_TOKEN: "root-gh",
@@ -30,7 +35,7 @@ describe("resolveEnv", () => {
       "CLAUDE_CODE_OAUTH_TOKEN=sc-oauth\nGH_TOKEN=sc-gh\n",
     );
 
-    const env = await resolveEnv(dir);
+    const env = await runResolveEnv(dir);
     expect(env).toEqual({
       CLAUDE_CODE_OAUTH_TOKEN: "sc-oauth",
       GH_TOKEN: "sc-gh",
@@ -49,7 +54,7 @@ describe("resolveEnv", () => {
       "CLAUDE_CODE_OAUTH_TOKEN=sc-oauth\nGH_TOKEN=sc-gh\n",
     );
 
-    const env = await resolveEnv(dir);
+    const env = await runResolveEnv(dir);
     expect(env["CLAUDE_CODE_OAUTH_TOKEN"]).toBe("root-oauth");
     expect(env["GH_TOKEN"]).toBe("root-gh");
   });
@@ -63,7 +68,7 @@ describe("resolveEnv", () => {
       "SC_ONLY=sc-val\nSHARED=sc\n",
     );
 
-    const env = await resolveEnv(dir);
+    const env = await runResolveEnv(dir);
     expect(env["ROOT_ONLY"]).toBe("root-val");
     expect(env["SC_ONLY"]).toBe("sc-val");
     expect(env["SHARED"]).toBe("root"); // root takes precedence
@@ -77,7 +82,7 @@ describe("resolveEnv", () => {
     const orig = process.env["MY_TOKEN"];
     try {
       process.env["MY_TOKEN"] = "from-process";
-      const env = await resolveEnv(dir);
+      const env = await runResolveEnv(dir);
       expect(env["MY_TOKEN"]).toBe("from-process");
     } finally {
       if (orig === undefined) delete process.env["MY_TOKEN"];
@@ -90,7 +95,7 @@ describe("resolveEnv", () => {
     await writeFile(join(dir, ".env"), "DECLARED_KEY=value\n");
 
     // PATH is always in process.env but should not appear in result
-    const env = await resolveEnv(dir);
+    const env = await runResolveEnv(dir);
     expect(env["PATH"]).toBeUndefined();
     expect(env["HOME"]).toBeUndefined();
     expect(env["DECLARED_KEY"]).toBe("value");
@@ -104,7 +109,7 @@ describe("resolveEnv", () => {
     const orig = process.env["MY_VAR"];
     try {
       process.env["MY_VAR"] = "from-process";
-      const env = await resolveEnv(dir);
+      const env = await runResolveEnv(dir);
       expect(env["MY_VAR"]).toBe("sc-val");
     } finally {
       if (orig === undefined) delete process.env["MY_VAR"];
@@ -114,7 +119,7 @@ describe("resolveEnv", () => {
 
   it("returns empty object when no .env files exist", async () => {
     const dir = await makeDir();
-    const env = await resolveEnv(dir);
+    const env = await runResolveEnv(dir);
     expect(env).toEqual({});
   });
 
@@ -125,7 +130,7 @@ describe("resolveEnv", () => {
       "# This is a comment\n\nKEY1=val1\n\n# Another comment\nKEY2=val2\n",
     );
 
-    const env = await resolveEnv(dir);
+    const env = await runResolveEnv(dir);
     expect(env).toEqual({ KEY1: "val1", KEY2: "val2" });
   });
 
@@ -137,7 +142,7 @@ describe("resolveEnv", () => {
       "NPM_TOKEN=npm123\nDATABASE_URL=pg://localhost\n",
     );
 
-    const env = await resolveEnv(dir);
+    const env = await runResolveEnv(dir);
     expect(env).toEqual({
       NPM_TOKEN: "npm123",
       DATABASE_URL: "pg://localhost",
@@ -152,7 +157,7 @@ describe("resolveEnv", () => {
     const orig = process.env["FALLBACK_KEY"];
     try {
       process.env["FALLBACK_KEY"] = "from-env";
-      const env = await resolveEnv(dir);
+      const env = await runResolveEnv(dir);
       expect(env["FALLBACK_KEY"]).toBe("from-env");
     } finally {
       if (orig === undefined) delete process.env["FALLBACK_KEY"];

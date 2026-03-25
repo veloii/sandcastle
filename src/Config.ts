@@ -1,5 +1,5 @@
+import { FileSystem } from "@effect/platform";
 import { Effect, Schema } from "effect";
-import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const HookDefinition = Schema.Struct({
@@ -38,13 +38,12 @@ const decodeConfig = Schema.decodeUnknownEither(SandcastleConfigSchema, {
 
 export const readConfig = (
   repoDir: string,
-): Effect.Effect<SandcastleConfig, ConfigError> =>
+): Effect.Effect<SandcastleConfig, ConfigError, FileSystem.FileSystem> =>
   Effect.gen(function* () {
-    const content = yield* Effect.promise(() =>
-      readFile(join(repoDir, ".sandcastle", "config.json"), "utf-8").catch(
-        () => null,
-      ),
-    );
+    const fs = yield* FileSystem.FileSystem;
+    const content = yield* fs
+      .readFileString(join(repoDir, ".sandcastle", "config.json"))
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
     if (content === null) return {} as SandcastleConfig;
 
     let raw: unknown;

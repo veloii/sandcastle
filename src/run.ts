@@ -1,3 +1,4 @@
+import { NodeContext } from "@effect/platform-node";
 import { mkdirSync } from "node:fs";
 import path, { dirname, join } from "node:path";
 import { Effect, Layer } from "effect";
@@ -124,11 +125,15 @@ export const run = async (options: RunOptions): Promise<RunResult> => {
 
   // Resolve prompt
   const rawPrompt = await Effect.runPromise(
-    resolvePrompt({ prompt, promptFile, cwd: hostRepoDir }),
+    resolvePrompt({ prompt, promptFile, cwd: hostRepoDir }).pipe(
+      Effect.provide(NodeContext.layer),
+    ),
   );
 
   // Read config
-  const config = await Effect.runPromise(readConfig(hostRepoDir));
+  const config = await Effect.runPromise(
+    readConfig(hostRepoDir).pipe(Effect.provide(NodeContext.layer)),
+  );
 
   // Merge hooks: explicit hooks override config hooks
   const resolvedConfig = hooks ? { ...config, hooks } : config;
@@ -145,7 +150,9 @@ export const run = async (options: RunOptions): Promise<RunResult> => {
     options.imageName ?? config.imageName ?? defaultImageName(hostRepoDir);
 
   // Resolve env vars and run agent provider's env check
-  const env = await resolveEnv(hostRepoDir);
+  const env = await Effect.runPromise(
+    resolveEnv(hostRepoDir).pipe(Effect.provide(NodeContext.layer)),
+  );
   provider.envCheck(env);
 
   // When no branch is provided, generate a temporary branch name.

@@ -1,3 +1,4 @@
+import { NodeContext } from "@effect/platform-node";
 import { Effect } from "effect";
 import { exec } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
@@ -790,14 +791,18 @@ describe("readConfig", () => {
       }),
     );
 
-    const config = await Effect.runPromise(readConfig(dir));
+    const config = await Effect.runPromise(
+      readConfig(dir).pipe(Effect.provide(NodeContext.layer)),
+    );
     expect(config.hooks?.onSandboxReady?.[0]?.command).toBe("npm install");
   });
 
   it("returns empty config when file is missing", async () => {
     const dir = await mkdtemp(join(tmpdir(), "config-"));
 
-    const config = await Effect.runPromise(readConfig(dir));
+    const config = await Effect.runPromise(
+      readConfig(dir).pipe(Effect.provide(NodeContext.layer)),
+    );
     expect(config.hooks).toBeUndefined();
   });
 
@@ -809,7 +814,9 @@ describe("readConfig", () => {
       JSON.stringify({}),
     );
 
-    const config = await Effect.runPromise(readConfig(dir));
+    const config = await Effect.runPromise(
+      readConfig(dir).pipe(Effect.provide(NodeContext.layer)),
+    );
     expect(config.hooks).toBeUndefined();
   });
 });

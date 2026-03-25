@@ -1,3 +1,4 @@
+import { NodeContext } from "@effect/platform-node";
 import { Cause, Effect, Exit } from "effect";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -14,6 +15,12 @@ const setupConfigDir = async (
   await writeFile(join(configDir, "config.json"), JSON.stringify(config));
 };
 
+const run = <A, E>(effect: Effect.Effect<A, E, NodeContext.NodeContext>) =>
+  Effect.runPromise(effect.pipe(Effect.provide(NodeContext.layer)));
+
+const runExit = <A, E>(effect: Effect.Effect<A, E, NodeContext.NodeContext>) =>
+  Effect.runPromiseExit(effect.pipe(Effect.provide(NodeContext.layer)));
+
 const expectConfigError = (exit: Exit.Exit<unknown, unknown>): string => {
   expect(exit._tag).toBe("Failure");
   if (exit._tag !== "Failure") throw new Error("unreachable");
@@ -29,7 +36,7 @@ describe("readConfig", () => {
     const repoDir = await mkdtemp(join(tmpdir(), "config-test-"));
     await setupConfigDir(repoDir, { defaultMaxIterations: 10 });
 
-    const config = await Effect.runPromise(readConfig(repoDir));
+    const config = await run(readConfig(repoDir));
     expect(config.defaultMaxIterations).toBe(10);
   });
 
@@ -37,14 +44,14 @@ describe("readConfig", () => {
     const repoDir = await mkdtemp(join(tmpdir(), "config-test-"));
     await setupConfigDir(repoDir, {});
 
-    const config = await Effect.runPromise(readConfig(repoDir));
+    const config = await run(readConfig(repoDir));
     expect(config.defaultMaxIterations).toBeUndefined();
   });
 
   it("returns empty config when file does not exist", async () => {
     const repoDir = await mkdtemp(join(tmpdir(), "config-test-"));
 
-    const config = await Effect.runPromise(readConfig(repoDir));
+    const config = await run(readConfig(repoDir));
     expect(config.defaultMaxIterations).toBeUndefined();
   });
 
@@ -52,7 +59,7 @@ describe("readConfig", () => {
     const repoDir = await mkdtemp(join(tmpdir(), "config-test-"));
     await setupConfigDir(repoDir, { defaultIterations: 10 });
 
-    const exit = await Effect.runPromiseExit(readConfig(repoDir));
+    const exit = await runExit(readConfig(repoDir));
     const message = expectConfigError(exit);
     expect(message).toContain("defaultIterations");
     expect(message).toContain("defaultMaxIterations");
@@ -62,7 +69,7 @@ describe("readConfig", () => {
     const repoDir = await mkdtemp(join(tmpdir(), "config-test-"));
     await setupConfigDir(repoDir, { postSyncIn: "npm install" });
 
-    const exit = await Effect.runPromiseExit(readConfig(repoDir));
+    const exit = await runExit(readConfig(repoDir));
     const message = expectConfigError(exit);
     expect(message).toContain("unexpected");
     expect(message).toContain("postSyncIn");
@@ -74,7 +81,7 @@ describe("readConfig", () => {
       hooks: { onBeforeRun: [{ command: "echo hi" }] },
     });
 
-    const exit = await Effect.runPromiseExit(readConfig(repoDir));
+    const exit = await runExit(readConfig(repoDir));
     const message = expectConfigError(exit);
     expect(message).toContain("unexpected");
     expect(message).toContain("onBeforeRun");
@@ -86,7 +93,7 @@ describe("readConfig", () => {
       hooks: { onSandboxReady: [{ command: "echo hi", timeout: 5000 }] },
     });
 
-    const exit = await Effect.runPromiseExit(readConfig(repoDir));
+    const exit = await runExit(readConfig(repoDir));
     const message = expectConfigError(exit);
     expect(message).toContain("unexpected");
     expect(message).toContain("timeout");
@@ -96,7 +103,7 @@ describe("readConfig", () => {
     const repoDir = await mkdtemp(join(tmpdir(), "config-test-"));
     await setupConfigDir(repoDir, { model: "claude-sonnet-4-6" });
 
-    const config = await Effect.runPromise(readConfig(repoDir));
+    const config = await run(readConfig(repoDir));
     expect(config.model).toBe("claude-sonnet-4-6");
   });
 
@@ -104,7 +111,7 @@ describe("readConfig", () => {
     const repoDir = await mkdtemp(join(tmpdir(), "config-test-"));
     await setupConfigDir(repoDir, {});
 
-    const config = await Effect.runPromise(readConfig(repoDir));
+    const config = await run(readConfig(repoDir));
     expect(config.model).toBeUndefined();
   });
 
@@ -112,7 +119,7 @@ describe("readConfig", () => {
     const repoDir = await mkdtemp(join(tmpdir(), "config-test-"));
     await setupConfigDir(repoDir, { agent: "claude-code" });
 
-    const config = await Effect.runPromise(readConfig(repoDir));
+    const config = await run(readConfig(repoDir));
     expect(config.agent).toBe("claude-code");
   });
 
@@ -120,7 +127,7 @@ describe("readConfig", () => {
     const repoDir = await mkdtemp(join(tmpdir(), "config-test-"));
     await setupConfigDir(repoDir, {});
 
-    const config = await Effect.runPromise(readConfig(repoDir));
+    const config = await run(readConfig(repoDir));
     expect(config.agent).toBeUndefined();
   });
 
@@ -128,7 +135,7 @@ describe("readConfig", () => {
     const repoDir = await mkdtemp(join(tmpdir(), "config-test-"));
     await setupConfigDir(repoDir, { imageName: "myapp:sandbox" });
 
-    const config = await Effect.runPromise(readConfig(repoDir));
+    const config = await run(readConfig(repoDir));
     expect(config.imageName).toBe("myapp:sandbox");
   });
 
@@ -136,7 +143,7 @@ describe("readConfig", () => {
     const repoDir = await mkdtemp(join(tmpdir(), "config-test-"));
     await setupConfigDir(repoDir, {});
 
-    const config = await Effect.runPromise(readConfig(repoDir));
+    const config = await run(readConfig(repoDir));
     expect(config.imageName).toBeUndefined();
   });
 
@@ -149,7 +156,7 @@ describe("readConfig", () => {
       defaultMaxIterations: 3,
     });
 
-    const config = await Effect.runPromise(readConfig(repoDir));
+    const config = await run(readConfig(repoDir));
     expect(config.hooks?.onSandboxReady?.[0]?.command).toBe("npm install");
     expect(config.defaultMaxIterations).toBe(3);
   });

@@ -1,5 +1,5 @@
+import { FileSystem } from "@effect/platform";
 import { Effect } from "effect";
-import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PromptError } from "./errors.js";
 
@@ -11,7 +11,7 @@ export interface ResolvePromptOptions {
 
 export const resolvePrompt = (
   options: ResolvePromptOptions,
-): Effect.Effect<string, PromptError> => {
+): Effect.Effect<string, PromptError, FileSystem.FileSystem> => {
   const { prompt, promptFile, cwd = process.cwd() } = options;
 
   if (prompt !== undefined && promptFile !== undefined) {
@@ -28,11 +28,16 @@ export const resolvePrompt = (
 
   const path = promptFile ?? join(cwd, ".sandcastle", "prompt.md");
 
-  return Effect.tryPromise({
-    try: () => readFile(path, "utf-8"),
-    catch: (e) =>
-      new PromptError({
-        message: `Failed to read prompt from ${path}: ${e}`,
-      }),
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* fs.readFileString(path).pipe(
+      Effect.catchAll((e) =>
+        Effect.fail(
+          new PromptError({
+            message: `Failed to read prompt from ${path}: ${e}`,
+          }),
+        ),
+      ),
+    );
   });
 };

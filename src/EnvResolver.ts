@@ -1,11 +1,16 @@
-import { readFile } from "node:fs/promises";
+import { FileSystem } from "@effect/platform";
+import { Effect } from "effect";
 import { join } from "node:path";
 
-const parseEnvFile = async (
+const parseEnvFile = (
   filePath: string,
-): Promise<Record<string, string>> => {
-  try {
-    const content = await readFile(filePath, "utf-8");
+): Effect.Effect<Record<string, string>, never, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const content = yield* fs
+      .readFileString(filePath)
+      .pipe(Effect.catchAll(() => Effect.succeed(null)));
+    if (content === null) return {};
     const vars: Record<string, string> = {};
     for (const line of content.split("\n")) {
       const trimmed = line.trim();
@@ -17,10 +22,7 @@ const parseEnvFile = async (
       vars[key] = value;
     }
     return vars;
-  } catch {
-    return {};
-  }
-};
+  });
 
 /**
  * Resolve all env vars from .env files with process.env fallback.
@@ -28,27 +30,28 @@ const parseEnvFile = async (
  * Precedence: repo root .env > .sandcastle/.env > process.env
  * Only keys declared in a .env file are resolved from process.env.
  */
-export const resolveEnv = async (
+export const resolveEnv = (
   repoDir: string,
-): Promise<Record<string, string>> => {
-  const rootEnv = await parseEnvFile(join(repoDir, ".env"));
-  const sandcastleEnv = await parseEnvFile(
-    join(repoDir, ".sandcastle", ".env"),
-  );
+): Effect.Effect<Record<string, string>, never, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const rootEnv = yield* parseEnvFile(join(repoDir, ".env"));
+    const sandcastleEnv = yield* parseEnvFile(
+      join(repoDir, ".sandcastle", ".env"),
+    );
 
-  // Collect all declared keys from both files
-  const allKeys = new Set([
-    ...Object.keys(rootEnv),
-    ...Object.keys(sandcastleEnv),
-  ]);
+    // Collect all declared keys from both files
+    const allKeys = new Set([
+      ...Object.keys(rootEnv),
+      ...Object.keys(sandcastleEnv),
+    ]);
 
-  const result: Record<string, string> = {};
-  for (const key of allKeys) {
-    const value = rootEnv[key] || sandcastleEnv[key] || process.env[key];
-    if (value) {
-      result[key] = value;
+    const result: Record<string, string> = {};
+    for (const key of allKeys) {
+      const value = rootEnv[key] || sandcastleEnv[key] || process.env[key];
+      if (value) {
+        result[key] = value;
+      }
     }
-  }
 
-  return result;
-};
+    return result;
+  });
