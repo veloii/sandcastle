@@ -254,6 +254,7 @@ const runCommand = Command.make(
             model: resolvedModel,
             agent: resolvedAgent,
             imageName: resolvedImageName,
+            logging: { type: "stdout" },
           }),
         catch: (e) =>
           new AgentError({

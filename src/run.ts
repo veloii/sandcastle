@@ -1,11 +1,18 @@
+import { mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { Effect, Layer } from "effect";
 import { getAgentProvider } from "./AgentProvider.js";
 import { readConfig } from "./Config.js";
-import { ClackDisplay, Display } from "./Display.js";
+import { ClackDisplay, Display, FileDisplay } from "./Display.js";
 import { orchestrate } from "./Orchestrator.js";
 import { resolvePrompt } from "./PromptResolver.js";
 import { DockerSandboxFactory, SandboxConfig } from "./SandboxFactory.js";
 import { resolveEnv } from "./EnvResolver.js";
+
+export type LoggingOption =
+  | { readonly type: "file"; readonly path: string }
+  | { readonly type: "stdout" };
 
 export interface RunOptions {
   /** Inline prompt string (mutually exclusive with promptFile) */
@@ -27,6 +34,8 @@ export interface RunOptions {
   readonly agent?: string;
   /** Docker image name to use for the sandbox (default: sandcastle:local) */
   readonly imageName?: string;
+  /** Logging mode (default: { type: 'file' } with auto-generated path under .sandcastle/logs/) */
+  readonly logging?: LoggingOption;
 }
 
 export interface RunResult {
@@ -80,6 +89,19 @@ export const run = async (options: RunOptions): Promise<RunResult> => {
   const env = await resolveEnv(hostRepoDir);
   provider.envCheck(env);
 
+  // Resolve logging option
+  const resolvedLogging: LoggingOption = options.logging ?? {
+    type: "file",
+    path: join(hostRepoDir, ".sandcastle", "logs", `${randomUUID()}.log`),
+  };
+  const displayLayer =
+    resolvedLogging.type === "file"
+      ? (() => {
+          mkdirSync(dirname(resolvedLogging.path), { recursive: true });
+          return FileDisplay.layer(resolvedLogging.path);
+        })()
+      : ClackDisplay.layer;
+
   const sandboxConfigLayer = Layer.succeed(SandboxConfig, {
     imageName: resolvedImageName,
     env,
@@ -88,7 +110,7 @@ export const run = async (options: RunOptions): Promise<RunResult> => {
     DockerSandboxFactory.layer,
     sandboxConfigLayer,
   );
-  const runLayer = Layer.merge(factoryLayer, ClackDisplay.layer);
+  const runLayer = Layer.merge(factoryLayer, displayLayer);
 
   const result = await Effect.runPromise(
     Effect.gen(function* () {
