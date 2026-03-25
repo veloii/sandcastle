@@ -1394,4 +1394,43 @@ describe("Orchestrator Display integration", () => {
       ),
     ).toBe(true);
   });
+
+  it("labels iteration header and max-reached message with 'max'", async () => {
+    const hostDir = await mkdtemp(join(tmpdir(), "orch-maxlabel-"));
+
+    await initRepo(hostDir);
+    await commitFile(hostDir, "hello.txt", "hello", "initial commit");
+
+    const ref = Ref.unsafeMake<ReadonlyArray<DisplayEntry>>([]);
+    const displayLayer = SilentDisplay.layer(ref);
+
+    const { factoryLayer, sandboxRepoDir } = makeTestSandboxFactory((dir) =>
+      makeMockAgentLayer(dir, async () => {
+        // Never signals completion
+        return "Nothing to do.";
+      }),
+    );
+
+    await Effect.runPromise(
+      orchestrate({
+        hostRepoDir: hostDir,
+        sandboxRepoDir,
+        iterations: 2,
+        prompt: "do some work",
+      }).pipe(Effect.provide(Layer.merge(factoryLayer, displayLayer))),
+    );
+
+    const entries = await Effect.runPromise(Ref.get(ref));
+    const statusEntries = entries.filter((e) => e._tag === "status");
+
+    // Iteration header should include "(max)" to clarify the denominator is the max
+    expect(
+      statusEntries.some((e) => e.message.includes("Iteration 1/2 (max)")),
+    ).toBe(true);
+
+    // Completion message when max is reached should say "max iterations"
+    expect(
+      statusEntries.some((e) => e.message.includes("max iterations")),
+    ).toBe(true);
+  });
 });

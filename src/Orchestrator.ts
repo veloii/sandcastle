@@ -179,7 +179,7 @@ export const orchestrate = (
     let resolvedBranch = "";
 
     for (let i = 1; i <= iterations; i++) {
-      yield* display.status(`Iteration ${i}/${iterations}`, "info");
+      yield* display.status(`Iteration ${i}/${iterations} (max)`, "info");
 
       const lifecycleResult = yield* factory.withSandbox(
         withSandboxLifecycle(
@@ -250,7 +250,7 @@ export const orchestrate = (
       }
     }
 
-    yield* display.status(`Completed ${iterations} iteration(s).`, "info");
+    yield* display.status(`Reached max iterations (${iterations}).`, "info");
     return {
       iterationsRun: iterations,
       wasCompletionSignalDetected: false,
