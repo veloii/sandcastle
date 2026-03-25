@@ -51,7 +51,7 @@ export function getNextStepsLines(template: string): string[] {
       "Next steps:",
       "1. Fill in .sandcastle/.env with your agent credentials",
       `2. Add "sandcastle": "npx tsx .sandcastle/main.ts" to your package.json scripts`,
-      "3. Customize the `npm install` command in the onSandboxReady hook if your project uses a different package manager",
+      '3. Templates use `copyToSandbox: ["node_modules"]` to copy your host node_modules into the sandbox for fast startup — the `npm install` in the onSandboxReady hook is a safety net for platform-specific binaries. Adjust both if you use a different package manager',
       "4. Read and customize the prompt files in .sandcastle/ — they shape what the agent does",
       "5. Run `npm run sandcastle` to start the agent",
     ];
