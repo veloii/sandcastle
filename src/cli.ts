@@ -1,5 +1,5 @@
 import { Command, Options } from "@effect/cli";
-import { Effect, Layer } from "effect";
+import { Effect, HashMap, Layer } from "effect";
 import * as clack from "@clack/prompts";
 import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
@@ -204,6 +204,11 @@ const modelOption = Options.text("model").pipe(
   Options.optional,
 );
 
+const promptArgOption = Options.keyValueMap("prompt-arg").pipe(
+  Options.withDescription("Prompt argument as KEY=VALUE (repeatable)"),
+  Options.optional,
+);
+
 const runCommand = Command.make(
   "run",
   {
@@ -214,6 +219,7 @@ const runCommand = Command.make(
     branch: branchOption,
     model: modelOption,
     agent: agentOption,
+    promptArgs: promptArgOption,
   },
   ({
     iterations,
@@ -223,6 +229,7 @@ const runCommand = Command.make(
     branch,
     model,
     agent,
+    promptArgs,
   }) =>
     Effect.gen(function* () {
       const d = yield* Display;
@@ -241,6 +248,17 @@ const runCommand = Command.make(
       const resolvedAgent = agent._tag === "Some" ? agent.value : undefined;
       const resolvedImageName = resolveImageName(imageNameFlag, config);
 
+      const resolvedPromptArgs =
+        promptArgs._tag === "Some"
+          ? HashMap.toEntries(promptArgs.value).reduce(
+              (acc, [k, v]) => {
+                acc[k] = v;
+                return acc;
+              },
+              {} as Record<string, string>,
+            )
+          : undefined;
+
       const result = yield* Effect.tryPromise({
         try: () =>
           run({
@@ -254,6 +272,7 @@ const runCommand = Command.make(
             model: resolvedModel,
             agent: resolvedAgent,
             imageName: resolvedImageName,
+            promptArgs: resolvedPromptArgs,
             logging: { type: "stdout" },
           }),
         catch: (e) =>
