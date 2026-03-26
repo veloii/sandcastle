@@ -1,5 +1,11 @@
 # @ai-hero/sandcastle
 
+## 0.1.6
+
+### Patch Changes
+
+- 1cd8bdb: Remove single-branch shortcut in parallel-planner template; always use the merge agent
+
 ## 0.1.5
 
 ### Patch Changes
