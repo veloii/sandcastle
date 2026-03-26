@@ -1,5 +1,13 @@
 # @ai-hero/sandcastle
 
+## 0.1.3
+
+### Patch Changes
+
+- 8b43a04: Remove pnpm/corepack from default sandbox Dockerfile template. The base Node.js image already includes npm, so the `corepack enable` step is unnecessary overhead. All init templates now use `npm install` and `npm run` instead of pnpm equivalents.
+- 925506d: Replace pnpm with npm in README documentation
+- 74b3f3b: Replace pnpm with npm in scaffold templates. All generated prompt files and main.ts hooks now use `npm install` and `npm run` instead of pnpm, consistent with the project's migration to npm.
+
 ## 0.1.2
 
 ### Patch Changes
