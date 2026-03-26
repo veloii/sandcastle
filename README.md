@@ -50,9 +50,49 @@ Sandcastle exports a programmatic `run()` function for use in scripts, CI pipeli
 import { run } from "@ai-hero/sandcastle";
 
 const result = await run({
-  promptFile: "./my-prompt.md",
-  maxIterations: 3,
-  branch: "agent/fix-123",
+  // Prompt source — provide one of these, not both:
+  promptFile: ".sandcastle/prompt.md", // path to a prompt file (default: .sandcastle/prompt.md)
+  // prompt: "Fix issue #42 in this repo", // OR an inline prompt string
+
+  // Values substituted for {{KEY}} placeholders in the prompt.
+  promptArgs: {
+    ISSUE_NUMBER: "42",
+  },
+
+  // Maximum number of agent iterations to run before stopping. Default: 1
+  maxIterations: 5,
+
+  // Branch the agent commits to inside the sandbox.
+  branch: "agent/fix-42",
+
+  // Claude model passed to the agent. Default: "claude-opus-4-6"
+  model: "claude-opus-4-6",
+
+  // Docker image used for the sandbox. Default: "sandcastle:<repo-dir-name>"
+  imageName: "sandcastle:local",
+
+  // Display name for this run, shown as a prefix in log output.
+  name: "fix-issue-42",
+
+  // Lifecycle hooks — arrays of shell commands run sequentially inside the sandbox.
+  hooks: {
+    // Runs after the worktree is mounted into the sandbox.
+    onSandboxReady: [{ command: "npm install" }],
+  },
+
+  // Host-relative file paths to copy into the worktree before the container starts.
+  copyToSandbox: [".env"],
+
+  // How to record progress. Default: write to a file under .sandcastle/logs/
+  logging: { type: "file", path: ".sandcastle/logs/my-run.log" },
+  // logging: { type: "stdout" }, // OR render an interactive UI in the terminal
+
+  // String the agent emits to end the iteration loop early.
+  // Default: "<promise>COMPLETE</promise>"
+  completionSignal: "<promise>COMPLETE</promise>",
+
+  // Maximum wall-clock time for the entire run, in seconds. Default: 1200 (20 minutes)
+  timeoutSeconds: 1200,
 });
 
 console.log(result.iterationsRun); // number of iterations executed
@@ -145,10 +185,9 @@ Select a template during `sandcastle init` when prompted, or re-run init in a fr
 
 Scaffolds the `.sandcastle/` config directory and builds the Docker image. This is the first command you run in a new repo.
 
-| Option         | Required | Default            | Description                                |
-| -------------- | -------- | ------------------ | ------------------------------------------ |
-| `--image-name` | No       | `sandcastle:local` | Docker image name                          |
-| `--agent`      | No       | `claude-code`      | Agent provider to use (e.g. `claude-code`) |
+| Option         | Required | Default            | Description       |
+| -------------- | -------- | ------------------ | ----------------- |
+| `--image-name` | No       | `sandcastle:local` | Docker image name |
 
 Creates the following files:
 
@@ -179,7 +218,6 @@ Opens an interactive Claude Code session inside the sandbox. Creates a worktree,
 | -------------- | -------- | ------------------ | -------------------------- |
 | `--image-name` | No       | `sandcastle:local` | Docker image name          |
 | `--model`      | No       | `claude-opus-4-6`  | Model to use for the agent |
-| `--agent`      | No       | `claude-code`      | Agent provider to use      |
 
 ### `sandcastle remove-image`
 
@@ -191,20 +229,21 @@ Removes the Docker image.
 
 ### `RunOptions`
 
-| Option             | Type       | Default                       | Description                                                    |
-| ------------------ | ---------- | ----------------------------- | -------------------------------------------------------------- |
-| `prompt`           | string     | —                             | Inline prompt (mutually exclusive with `promptFile`)           |
-| `promptFile`       | string     | `.sandcastle/prompt.md`       | Path to prompt file (mutually exclusive with `prompt`)         |
-| `maxIterations`    | number     | `5`                           | Maximum iterations to run                                      |
-| `hooks`            | object     | —                             | Lifecycle hooks (`onSandboxReady`)                             |
-| `branch`           | string     | —                             | Target branch for sandbox work                                 |
-| `model`            | string     | `claude-opus-4-6`             | Model to use for the agent                                     |
-| `agent`            | string     | `claude-code`                 | Agent provider name                                            |
-| `imageName`        | string     | `sandcastle:local`            | Docker image name for the sandbox                              |
-| `promptArgs`       | PromptArgs | —                             | Key-value map for `{{KEY}}` placeholder substitution           |
-| `logging`          | object     | file (auto-generated)         | `{ type: 'file', path }` or `{ type: 'stdout' }`               |
-| `completionSignal` | string     | `<promise>COMPLETE</promise>` | Custom string the agent emits to stop the iteration loop early |
-| `timeoutSeconds`   | number     | `900`                         | Timeout for the entire run in seconds                          |
+| Option             | Type       | Default                       | Description                                                     |
+| ------------------ | ---------- | ----------------------------- | --------------------------------------------------------------- |
+| `prompt`           | string     | —                             | Inline prompt (mutually exclusive with `promptFile`)            |
+| `promptFile`       | string     | `.sandcastle/prompt.md`       | Path to prompt file (mutually exclusive with `prompt`)          |
+| `maxIterations`    | number     | `1`                           | Maximum iterations to run                                       |
+| `hooks`            | object     | —                             | Lifecycle hooks (`onSandboxReady`)                              |
+| `branch`           | string     | —                             | Target branch for sandbox work                                  |
+| `model`            | string     | `claude-opus-4-6`             | Model to use for the agent                                      |
+| `imageName`        | string     | `sandcastle:<repo-dir-name>`  | Docker image name for the sandbox                               |
+| `name`             | string     | —                             | Display name for the run, shown as a prefix in log output       |
+| `promptArgs`       | PromptArgs | —                             | Key-value map for `{{KEY}}` placeholder substitution            |
+| `copyToSandbox`    | string[]   | —                             | Host-relative file paths to copy into the worktree before start |
+| `logging`          | object     | file (auto-generated)         | `{ type: 'file', path }` or `{ type: 'stdout' }`                |
+| `completionSignal` | string     | `<promise>COMPLETE</promise>` | Custom string the agent emits to stop the iteration loop early  |
+| `timeoutSeconds`   | number     | `1200`                        | Timeout for the entire run in seconds                           |
 
 ### `RunResult`
 
