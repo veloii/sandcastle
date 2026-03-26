@@ -524,6 +524,17 @@ describe("InitService scaffold", () => {
       expect(prompt).toContain("{{ISSUES}}");
     });
 
+    it("main.ts closes the issue when only a single branch is merged", async () => {
+      const dir = await makeDir();
+      await runScaffold(dir, fakeProvider, "parallel-planner");
+
+      const mainTs = await readFile(
+        join(dir, ".sandcastle", "main.ts"),
+        "utf-8",
+      );
+      expect(mainTs).toContain("gh issue close");
+    });
+
     it("common files are still generated with parallel-planner template", async () => {
       const dir = await makeDir();
       await runScaffold(dir, fakeProvider, "parallel-planner");

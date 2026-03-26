@@ -171,9 +171,11 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     // Single branch — merge directly without spinning up a merge agent.
     const { execSync } = await import("node:child_process");
     const branch = completedBranches[0]!;
+    const issue = completedIssues[0]!;
     console.log(`\nSingle branch — merging ${branch} directly.`);
     execSync(`git merge ${branch}`, { stdio: "inherit" });
-    console.log("\nBranch merged.");
+    execSync(`gh issue close ${issue.number}`, { stdio: "inherit" });
+    console.log(`\nBranch merged and issue #${issue.number} closed.`);
   } else {
     // -------------------------------------------------------------------------
     // Phase 3: Merge
