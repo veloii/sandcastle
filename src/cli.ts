@@ -34,11 +34,6 @@ const resolveImageName = (
   cwd: string,
 ): string => (cliFlag._tag === "Some" ? cliFlag.value : defaultImageName(cwd));
 
-const agentOption = Options.text("agent").pipe(
-  Options.withDescription("Agent provider to use (e.g. claude-code)"),
-  Options.optional,
-);
-
 // --- Config directory check ---
 
 const CONFIG_DIR = ".sandcastle";
@@ -73,17 +68,16 @@ const initCommand = Command.make(
   "init",
   {
     imageName: imageNameOption,
-    agent: agentOption,
     template: templateOption,
   },
-  ({ imageName: imageNameFlag, agent, template }) =>
+  ({ imageName: imageNameFlag, template }) =>
     Effect.gen(function* () {
       const d = yield* Display;
       const cwd = process.cwd();
       const imageName = resolveImageName(imageNameFlag, cwd);
 
-      // Resolve agent provider: CLI flag > default
-      const agentName = agent._tag === "Some" ? agent.value : "claude-code";
+      // Agent is hardcoded to claude-code (agent selection is not part of the public API)
+      const agentName = "claude-code";
       const provider = yield* Effect.try({
         try: () => getAgentProvider(agentName),
         catch: (e) =>
@@ -312,23 +306,13 @@ const interactiveCommand = Command.make(
   {
     imageName: imageNameOption,
     model: modelOption,
-    agent: agentOption,
   },
-  ({ imageName: imageNameFlag, model, agent }) =>
+  ({ imageName: imageNameFlag, model }) =>
     Effect.gen(function* () {
       const hostRepoDir = process.cwd();
       yield* requireConfigDir(hostRepoDir);
 
-      // Resolve agent provider: CLI flag > default
       const imageName = resolveImageName(imageNameFlag, hostRepoDir);
-      const agentName = agent._tag === "Some" ? agent.value : "claude-code";
-      const provider = yield* Effect.try({
-        try: () => getAgentProvider(agentName),
-        catch: (e) =>
-          new InitError({
-            message: `${e instanceof Error ? e.message : e}`,
-          }),
-      });
 
       // Resolve env vars
       const env = yield* resolveEnv(hostRepoDir);

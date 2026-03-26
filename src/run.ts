@@ -126,8 +126,6 @@ export interface RunOptions {
   readonly branch?: string;
   /** Model to use for the agent (default: claude-opus-4-6) */
   readonly model?: string;
-  /** Agent provider name (default: claude-code) */
-  readonly agent?: string;
   /** Docker image name to use for the sandbox (default: sandcastle:<repo-dir-name>) */
   readonly imageName?: string;
   /** Key-value map for {{KEY}} placeholder substitution in prompts */
@@ -167,7 +165,6 @@ export const run = async (options: RunOptions): Promise<RunResult> => {
     hooks,
     branch,
     model,
-    agent,
   } = options;
 
   const hostRepoDir = process.cwd();
@@ -182,8 +179,8 @@ export const run = async (options: RunOptions): Promise<RunResult> => {
   // Resolve model: explicit option > default
   const resolvedModel = model;
 
-  // Resolve agent provider: explicit option > default
-  const agentName = agent ?? "claude-code";
+  // Agent is hardcoded to claude-code (agent selection is not part of the public API)
+  const agentName = "claude-code";
   const provider = getAgentProvider(agentName);
 
   // Resolve image name: explicit option > default

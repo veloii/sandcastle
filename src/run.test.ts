@@ -141,6 +141,12 @@ describe("DEFAULT_MAX_ITERATIONS", () => {
 });
 
 describe("RunOptions", () => {
+  it("does not expose agent field", () => {
+    const opts: RunOptions = { prompt: "test" };
+    // @ts-expect-error agent should not be a property of RunOptions
+    expect(opts.agent).toBeUndefined();
+  });
+
   it("allows timeoutSeconds to be specified", () => {
     const opts: RunOptions = { prompt: "test", timeoutSeconds: 120 };
     expect(opts.timeoutSeconds).toBe(120);
