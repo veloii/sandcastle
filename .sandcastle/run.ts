@@ -16,6 +16,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     maxIterations: 1,
     model: "claude-opus-4-6",
     promptFile: "./.sandcastle/plan-prompt.md",
+    copyToSandbox: ["node_modules"],
   });
 
   const planMatch = plan.stdout.match(/<plan>([\s\S]*?)<\/plan>/);
@@ -56,6 +57,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
           BRANCH: issue.branch,
         },
         branch: issue.branch,
+        copyToSandbox: ["node_modules"],
       }),
     ),
   );
@@ -111,6 +113,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
         .map((i) => `- #${i.number}: ${i.title}`)
         .join("\n"),
     },
+    copyToSandbox: ["node_modules"],
   });
 
   console.log("\nBranches merged.");
