@@ -270,7 +270,7 @@ Creates the following files:
 ├── Dockerfile      # Sandbox environment (customize as needed)
 ├── prompt.md       # Agent instructions
 ├── .env.example    # Token placeholders
-└── .gitignore      # Ignores .env, patches/, logs/
+└── .gitignore      # Ignores .env, logs/, worktrees/
 ```
 
 Errors if `.sandcastle/` already exists to prevent overwriting customizations.
