@@ -147,7 +147,7 @@ describe("pi factory", () => {
     const provider = pi("claude-sonnet-4-6");
     const line = JSON.stringify({
       type: "message_update",
-      content: [{ type: "text_delta", text: "Hello world" }],
+      assistantMessageEvent: [{ type: "text_delta", delta: "Hello world" }],
     });
     expect(provider.parseStreamLine(line)).toEqual([
       { type: "text", text: "Hello world" },
@@ -158,8 +158,9 @@ describe("pi factory", () => {
     const provider = pi("claude-sonnet-4-6");
     const line = JSON.stringify({
       type: "tool_execution_start",
-      tool_name: "Bash",
-      input: { command: "npm test" },
+      toolCallId: "call_xxx",
+      toolName: "Bash",
+      args: { command: "npm test" },
     });
     expect(provider.parseStreamLine(line)).toEqual([
       { type: "tool_call", name: "Bash", args: "npm test" },
@@ -170,8 +171,9 @@ describe("pi factory", () => {
     const provider = pi("claude-sonnet-4-6");
     const line = JSON.stringify({
       type: "tool_execution_start",
-      tool_name: "UnknownTool",
-      input: { foo: "bar" },
+      toolCallId: "call_xxx",
+      toolName: "UnknownTool",
+      args: { foo: "bar" },
     });
     expect(provider.parseStreamLine(line)).toEqual([]);
   });
@@ -180,8 +182,16 @@ describe("pi factory", () => {
     const provider = pi("claude-sonnet-4-6");
     const line = JSON.stringify({
       type: "agent_end",
-      last_assistant_message: "Final answer <promise>COMPLETE</promise>",
+      messages: [
+        {
+          role: "assistant",
+          content: [
+            { type: "text", text: "Final answer <promise>COMPLETE</promise>" },
+          ],
+        },
+      ],
     });
+
     expect(provider.parseStreamLine(line)).toEqual([
       {
         type: "result",
@@ -196,28 +206,67 @@ describe("pi factory", () => {
     const line = JSON.stringify({
       type: "agent_end",
       last_assistant_message: "Done",
-      usage: {
-        input_tokens: 100,
-        output_tokens: 50,
-        cache_read_input_tokens: 10,
-        cache_creation_input_tokens: 5,
-      },
-      total_cost_usd: 0.01,
-      num_turns: 3,
-      duration_ms: 5000,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Run echo hello using the bash tool,\n then reply done",
+            },
+          ],
+          timestamp: 1000000000000,
+        },
+        {
+          role: "assistant",
+          usage: {
+            input: 100,
+            output: 50,
+            cacheRead: 10,
+            cacheWrite: 5,
+            totalTokens: 165,
+            cost: {
+              input: 3,
+              output: 4,
+              cacheRead: 2,
+              cacheWrite: 1,
+              total: 10,
+            },
+          },
+          timestamp: 1000000010000,
+        },
+        {
+          role: "assistant",
+          usage: {
+            input: 100,
+            output: 50,
+            cacheRead: 10,
+            cacheWrite: 5,
+            totalTokens: 165,
+            cost: {
+              input: 3,
+              output: 4,
+              cacheRead: 2,
+              cacheWrite: 1,
+              total: 10,
+            },
+          },
+          timestamp: 1000000020000,
+        },
+      ],
     });
     const events = provider.parseStreamLine(line);
     expect(events).toHaveLength(1);
     expect(events[0]!.type).toBe("result");
     const result = events[0] as { type: "result"; usage: unknown };
     expect(result.usage).toEqual({
-      input_tokens: 100,
-      output_tokens: 50,
-      cache_read_input_tokens: 10,
-      cache_creation_input_tokens: 5,
-      total_cost_usd: 0.01,
-      num_turns: 3,
-      duration_ms: 5000,
+      input_tokens: 200,
+      output_tokens: 100,
+      cache_read_input_tokens: 20,
+      cache_creation_input_tokens: 10,
+      total_cost_usd: 20,
+      num_turns: 2,
+      duration_ms: 20_000,
     });
   });
 
@@ -248,7 +297,7 @@ describe("pi factory", () => {
     const provider = pi("claude-sonnet-4-6");
     const line = JSON.stringify({
       type: "tool_execution_start",
-      tool_name: "Bash",
+      toolName: "Bash",
       // no input field
     });
     expect(provider.parseStreamLine(line)).toEqual([]);
